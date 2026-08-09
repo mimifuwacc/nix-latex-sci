@@ -1,0 +1,33 @@
+name: Dependabot auto-merge
+
+on:
+  workflow_run:
+    workflows: [check]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.pull_requests[0] != null
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+      REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Verify Dependabot PR and merge
+        shell: bash
+        run: |
+          author=$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER" --jq '.user.login')
+          if [[ "$author" != "dependabot[bot]" ]]; then
+            echo "Refusing to merge PR #$PR_NUMBER opened by $author"
+            exit 1
+          fi
+
+          gh pr merge "$PR_NUMBER" --repo "$REPOSITORY" --squash --delete-branch
